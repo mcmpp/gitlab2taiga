@@ -8,24 +8,23 @@ import sys, getopt
 import getpass
 import validators
 
-ENDPOINT_GET_PROJECT = "/api/v1/projects"
-ENDPOINT_GET_MEMBERS = "/api/v1/memberships"
+ENDPOINT_PROJECTS = "/api/v1/projects"
+ENDPOINT_MEMBERS = "/api/v1/memberships"
 ENDPOINT_LOGIN = "/api/v1/auth"
 
 def main(argv):
     try:
-        opts, args = getopt.getopt(argv,'hi:m:e:u:')
+        opts, args = getopt.getopt(argv,'hi:m:e:u:p:')
     except getopt.GetoptError:
-        print ('gitlab2taiga.py -i <issues file> -m <members file> -e <taiga endpoint> -u <taiga username>')
+        print ('gitlab2taiga.py -i <issues file> -m <members file> -e <taiga endpoint> -u <taiga username> -p <project name>')
         sys.exit(2)
-    if len(opts) != 4:
-        print ('gitlab2taiga.py -i <issues file> -m <members file> -e <taiga endpoint> -u <taiga username>')
+    if len(opts) != 5:
+        print ('gitlab2taiga.py -i <issues file> -m <members file> -e <taiga endpoint> -u <taiga username> -p <project name>')
         sys.exit(2)
     else:
-        print (opts)
         for opt, arg in opts:
             if opt == '-h':
-                print ('gitlab2taiga.py -i <issues file> -m <members file> -e <taiga endpoint> -u <taiga username>')
+                print ('gitlab2taiga.py -i <issues file> -m <members file> -e <taiga endpoint> -u <taiga username> -p <project name>')
                 sys.exit()
             elif opt in '-i':
                 issues_file = arg
@@ -35,11 +34,16 @@ def main(argv):
                 endpoint = arg
             elif opt in '-u':
                 username = arg
+            elif opt in '-p':
+                projectName = arg
             else:
-                print ('gitlab2taiga.py -i <issues file> -m <members file> -e <taiga endpoint> -u <taiga username>')
-        if (username is not None) and (issues_file is not None) and (members_file is not None) and (endpoint is not None):
+                print ('gitlab2taiga.py -i <issues file> -m <members file> -e <taiga endpoint> -u <taiga username> -p <project name>')
+        if (username is not None) and (issues_file is not None) and (members_file is not None) and (endpoint is not None) and (projectName is not None):
             getAccessToken(username, issues_file, members_file, endpoint)
-            getMemberships(username, issues_file, members_file, endpoint)
+            createProject(username, endpoint, projectName)
+            #getMemberships(username, issues_file, members_file, endpoint)
+        else:
+            print ('gitlab2taiga.py -i <issues file> -m <members file> -e <taiga endpoint> -u <taiga username> -p <project name>')
 
 def importIssues(issues, members ):
     records = map(ujson.loads, open(path_issues, encoding="utf8"))
@@ -52,13 +56,14 @@ def importIssues(issues, members ):
 
 def getAccessToken(username, issues_file, members_file, endpoint):
     if (validators.url(endpoint)):
+        print('Please, introduce the password to connect to taiga username already provided')
         global password
         password = getpass.getpass()
-        d = {}
-        d['password'] = password;
-        d['type'] = 'normal';
-        d['username'] = username;
-        response = requests.post(endpoint + ENDPOINT_LOGIN, data = d)
+        data = {}
+        data['password'] = password;
+        data['type'] = 'normal';
+        data['username'] = username;
+        response = requests.post(endpoint + ENDPOINT_LOGIN, data = data)
         if response.ok:
             responseJson = response.json()
             try:
@@ -80,7 +85,7 @@ def getMemberships(username, issues_file, members_file, endpoint):
         if (password is not None):
             if (authToken is not None):
                 headers = {"Authorization": "Bearer " + authToken}
-                response = requests.get(endpoint + ENDPOINT_GET_MEMBERS, headers = headers)
+                response = requests.get(endpoint + ENDPOINT_MEMBERS, headers = headers)
                 if response.ok:
                     responseJson = response.json()
                     try:
@@ -91,6 +96,30 @@ def getMemberships(username, issues_file, members_file, endpoint):
                         return memberName
                     except:
                         print ('We could not get the memberships full name')
+                else:
+                    print ('The response from the server is not valid')
+                    exit (2)
+            else:
+                print ('The auth token is not correct')
+                exit (2)
+        else:
+            print ('The password is not correct')
+            exit (2)
+    else:
+        print ('The endpoint provided is not a valid url')
+        exit (2)
+
+def createProject(username, endpoint, projectName):
+    if (validators.url(endpoint)):
+        if (password is not None):
+            if (authToken is not None):
+                headers = {"Authorization": "Bearer " + authToken}
+                data = {}
+                data['description'] = "Gitlab import from " + projectName
+                data['name'] = projectName
+                response = requests.post(endpoint + ENDPOINT_PROJECTS, data = data, headers = headers)
+                if response.ok:
+                    print ('The project ' + projectName + ' has been created')
                 else:
                     print ('The response from the server is not valid')
                     exit (2)
