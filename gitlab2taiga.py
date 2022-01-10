@@ -8,10 +8,9 @@ import sys, getopt
 import getpass
 import validators
 
-
 ENDPOINT_GET_PROJECT = "/api/v1/projects"
+ENDPOINT_GET_MEMBERS = "/api/v1/memberships"
 ENDPOINT_LOGIN = "/api/v1/auth"
-
 
 def main(argv):
     try:
@@ -40,7 +39,7 @@ def main(argv):
                 print ('gitlab2taiga.py -i <issues file> -m <members file> -e <taiga endpoint> -u <taiga username>')
         if (username is not None) and (issues_file is not None) and (members_file is not None) and (endpoint is not None):
             getAccessToken(username, issues_file, members_file, endpoint)
-
+            getMemberships(username, issues_file, members_file, endpoint)
 
 def importIssues(issues, members ):
     records = map(ujson.loads, open(path_issues, encoding="utf8"))
@@ -51,12 +50,10 @@ def importIssues(issues, members ):
     print(df[['description']].head(15))
     #print(df.iloc[2])
 
-
 def getAccessToken(username, issues_file, members_file, endpoint):
-    print ('username: ', username, ' issues_file: ', issues_file, ' members_file: ', members_file, ' endpoint ', endpoint )
     if (validators.url(endpoint)):
+        global password
         password = getpass.getpass()
-        #response = requests.get(endpoint)
         d = {}
         d['password'] = password;
         d['type'] = 'normal';
@@ -67,6 +64,7 @@ def getAccessToken(username, issues_file, members_file, endpoint):
             try:
                 global authToken
                 authToken = responseJson['auth_token']
+                print ('Auth token request successful')
             except:
                 print ('We could not get the authorization token from the login request')
                 exit (2)
@@ -77,6 +75,49 @@ def getAccessToken(username, issues_file, members_file, endpoint):
         print ('The endpoint provided is not a valid url')
         exit (2)
 
+def getMemberships(username, issues_file, members_file, endpoint):
+    if (validators.url(endpoint)):
+        if (password is not None):
+            if (authToken is not None):
+                headers = {"Authorization": "Bearer " + authToken}
+                response = requests.get(endpoint + ENDPOINT_GET_MEMBERS, headers = headers)
+                if response.ok:
+                    responseJson = response.json()
+                    try:
+                        memberName = []
+                        for membership in responseJson:
+                            memberName.append(membership['full_name'])
+                        print ('The current memberships are: ' , memberName)
+                        return memberName
+                    except:
+                        print ('We could not get the memberships full name')
+                else:
+                    print ('The response from the server is not valid')
+                    exit (2)
+            else:
+                print ('The auth token is not correct')
+                exit (2)
+        else:
+            print ('The password is not correct')
+            exit (2)
+    else:
+        print ('The endpoint provided is not a valid url')
+        exit (2)
+
+def createIssue(username, issues_file, members_file, endpoint):
+    if (validators.url(endpoint)):
+        if (password is not None):
+            if (authToken is not None):
+                print (authToken)
+            else:
+                print ('The auth token is not correct')
+                exit (2)
+        else:
+            print ('The password is not correct')
+            exit (2)
+    else:
+        print ('The endpoint provided is not a valid url')
+        exit (2)
 
 if __name__ == "__main__":
    main(sys.argv[1:])
