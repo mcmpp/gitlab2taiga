@@ -110,16 +110,51 @@ def getMemberships(username, issues_file, members_file, endpoint):
         exit (2)
 
 def createProject(username, endpoint, projectName):
+    if not projectNameExists(username, endpoint, projectName):
+        if (validators.url(endpoint)):
+            if (password is not None):
+                if (authToken is not None):
+                    headers = {"Authorization": "Bearer " + authToken}
+                    data = {}
+                    data['description'] = "Gitlab import from " + projectName
+                    data['name'] = projectName
+                    response = requests.post(endpoint + ENDPOINT_PROJECTS, data = data, headers = headers)
+                    if response.ok:
+                        responseJson = response.json()
+                        global projectId
+                        projectId = responseJson['id']
+                        print ('The project ' , projectName , ' with id= ' , projectId , 'has been created')
+                    else:
+                        print ('The response from the server is not valid')
+                        exit (2)
+                else:
+                    print ('The auth token is not correct')
+                    exit (2)
+            else:
+                print ('The password is not correct')
+                exit (2)
+        else:
+            print ('The endpoint provided is not a valid url')
+            exit (2)
+    else:
+            print ('The project already exists')
+            exit (2)
+
+def projectNameExists(username, endpoint, projectName):
     if (validators.url(endpoint)):
         if (password is not None):
             if (authToken is not None):
                 headers = {"Authorization": "Bearer " + authToken}
-                data = {}
-                data['description'] = "Gitlab import from " + projectName
-                data['name'] = projectName
-                response = requests.post(endpoint + ENDPOINT_PROJECTS, data = data, headers = headers)
+                response = requests.get(endpoint + ENDPOINT_PROJECTS, headers = headers)
                 if response.ok:
-                    print ('The project ' + projectName + ' has been created')
+                    responseJson = response.json()
+                    try:
+                        for project in responseJson:
+                            if project['name'] == projectName:
+                                return True
+                        return False
+                    except:
+                        print ('We could not get the project name')
                 else:
                     print ('The response from the server is not valid')
                     exit (2)
