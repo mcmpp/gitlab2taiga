@@ -39,9 +39,13 @@ def main(argv):
             else:
                 print ('gitlab2taiga.py -i <issues file> -m <members file> -e <taiga endpoint> -u <taiga username> -p <project name>')
         if (username is not None) and (issues_file is not None) and (members_file is not None) and (endpoint is not None) and (projectName is not None):
-            getAccessToken(username, issues_file, members_file, endpoint)
-            createProject(username, endpoint, projectName)
+            if (validators.url(endpoint)):
+                getAccessToken(username, issues_file, members_file, endpoint)
+                createProject(username, endpoint, projectName)
             #getMemberships(username, issues_file, members_file, endpoint)
+            else:
+                print ('The endpoint provided is not a valid url')
+                exit (2)
         else:
             print ('gitlab2taiga.py -i <issues file> -m <members file> -e <taiga endpoint> -u <taiga username> -p <project name>')
 
@@ -55,132 +59,91 @@ def importIssues(issues, members ):
     #print(df.iloc[2])
 
 def getAccessToken(username, issues_file, members_file, endpoint):
-    if (validators.url(endpoint)):
-        print('Please, introduce the password to connect to taiga username already provided')
-        global password
-        password = getpass.getpass()
-        data = {}
-        data['password'] = password;
-        data['type'] = 'normal';
-        data['username'] = username;
-        response = requests.post(endpoint + ENDPOINT_LOGIN, data = data)
-        if response.ok:
-            responseJson = response.json()
-            try:
-                global authToken
-                authToken = responseJson['auth_token']
-                print ('Auth token request successful')
-            except:
-                print ('We could not get the authorization token from the login request')
-                exit (2)
-        else:
-            print ('The response from the server is not valid')
+    print('Please, introduce the password to connect to taiga username already provided')
+    global password
+    password = getpass.getpass()
+    data = {}
+    data['password'] = password;
+    data['type'] = 'normal';
+    data['username'] = username;
+    response = requests.post(endpoint + ENDPOINT_LOGIN, data = data)
+    if response.ok:
+        responseJson = response.json()
+        try:
+            global authToken
+            authToken = responseJson['auth_token']
+            print ('Auth token request successful')
+        except:
+            print ('We could not get the authorization token from the login request')
             exit (2)
     else:
-        print ('The endpoint provided is not a valid url')
+        print ('The response from the server is not valid')
         exit (2)
 
 def getMemberships(username, issues_file, members_file, endpoint):
-    if (validators.url(endpoint)):
-        if (password is not None):
-            if (authToken is not None):
-                headers = {"Authorization": "Bearer " + authToken}
-                response = requests.get(endpoint + ENDPOINT_MEMBERS, headers = headers)
-                if response.ok:
-                    responseJson = response.json()
-                    try:
-                        memberName = []
-                        for membership in responseJson:
-                            memberName.append(membership['full_name'])
-                        print ('The current memberships are: ' , memberName)
-                        return memberName
-                    except:
-                        print ('We could not get the memberships full name')
-                else:
-                    print ('The response from the server is not valid')
-                    exit (2)
-            else:
-                print ('The auth token is not correct')
-                exit (2)
-        else:
-            print ('The password is not correct')
-            exit (2)
+    headers = prepareHeaders()
+    response = requests.get(endpoint + ENDPOINT_MEMBERS, headers = headers)
+    if response.ok:
+        responseJson = response.json()
+        try:
+            memberName = []
+            for membership in responseJson:
+                memberName.append(membership['full_name'])
+            print ('The current memberships are: ' , memberName)
+            return memberName
+        except:
+            print ('We could not get the memberships full name')
     else:
-        print ('The endpoint provided is not a valid url')
+        print ('The response from the server is not valid')
+        exit (2)
+
+def prepareHeaders():
+    if (authToken is not None):
+        return {"Authorization": "Bearer " + authToken}
+    else:
+        print ('The auth token is not correct')
         exit (2)
 
 def createProject(username, endpoint, projectName):
     if not projectNameExists(username, endpoint, projectName):
-        if (validators.url(endpoint)):
-            if (password is not None):
-                if (authToken is not None):
-                    headers = {"Authorization": "Bearer " + authToken}
-                    data = {}
-                    data['description'] = "Gitlab import from " + projectName
-                    data['name'] = projectName
-                    response = requests.post(endpoint + ENDPOINT_PROJECTS, data = data, headers = headers)
-                    if response.ok:
-                        responseJson = response.json()
-                        global projectId
-                        projectId = responseJson['id']
-                        print ('The project ' , projectName , ' with id= ' , projectId , 'has been created')
-                    else:
-                        print ('The response from the server is not valid')
-                        exit (2)
-                else:
-                    print ('The auth token is not correct')
-                    exit (2)
-            else:
-                print ('The password is not correct')
-                exit (2)
+        headers = {"Authorization": "Bearer " + authToken}
+        data = {}
+        data['description'] = "Gitlab import from " + projectName
+        data['name'] = projectName
+        response = requests.post(endpoint + ENDPOINT_PROJECTS, data = data, headers = headers)
+        if response.ok:
+            responseJson = response.json()
+            global projectId
+            projectId = responseJson['id']
+            print ('The project ' , projectName , ' with id= ' , projectId , 'has been created')
         else:
-            print ('The endpoint provided is not a valid url')
+            print ('The response from the server is not valid')
             exit (2)
     else:
-            print ('The project already exists')
-            exit (2)
+        print ('The project already exists')
+        exit (2)
 
 def projectNameExists(username, endpoint, projectName):
-    if (validators.url(endpoint)):
-        if (password is not None):
-            if (authToken is not None):
-                headers = {"Authorization": "Bearer " + authToken}
-                response = requests.get(endpoint + ENDPOINT_PROJECTS, headers = headers)
-                if response.ok:
-                    responseJson = response.json()
-                    try:
-                        for project in responseJson:
-                            if project['name'] == projectName:
-                                return True
-                        return False
-                    except:
-                        print ('We could not get the project name')
-                else:
-                    print ('The response from the server is not valid')
-                    exit (2)
-            else:
-                print ('The auth token is not correct')
-                exit (2)
-        else:
-            print ('The password is not correct')
-            exit (2)
+    headers = {"Authorization": "Bearer " + authToken}
+    response = requests.get(endpoint + ENDPOINT_PROJECTS, headers = headers)
+    if response.ok:
+        responseJson = response.json()
+        try:
+            for project in responseJson:
+                if project['name'] == projectName:
+                    return True
+            return False
+        except:
+            print ('We could not get the project name')
     else:
-        print ('The endpoint provided is not a valid url')
+        print ('The response from the server is not valid')
         exit (2)
 
 def createIssue(username, issues_file, members_file, endpoint):
-    if (validators.url(endpoint)):
-        if (password is not None):
-            if (authToken is not None):
-                print (authToken)
-            else:
-                print ('The auth token is not correct')
-                exit (2)
-        else:
-            print ('The password is not correct')
-            exit (2)
+    if (authToken is not None):
+        print (authToken)
     else:
-        print ('The endpoint provided is not a valid url')
+        print ('The auth token is not correct')
         exit (2)
 
 if __name__ == "__main__":
