@@ -10,6 +10,7 @@ import validators
 
 ENDPOINT_PROJECTS = "/api/v1/projects"
 ENDPOINT_MEMBERS = "/api/v1/memberships"
+ENDPOINT_ROLES = "/api/v1/roles"
 ENDPOINT_LOGIN = "/api/v1/auth"
 
 def main(argv):
@@ -42,21 +43,12 @@ def main(argv):
             if (validators.url(endpoint)):
                 getAccessToken(username, issues_file, members_file, endpoint)
                 createProject(username, endpoint, projectName)
-            #getMemberships(username, issues_file, members_file, endpoint)
+                createMemberships(endpoint, members_file)
             else:
                 print ('The endpoint provided is not a valid url')
                 exit (2)
         else:
             print ('gitlab2taiga.py -i <issues file> -m <members file> -e <taiga endpoint> -u <taiga username> -p <project name>')
-
-def importIssues(issues, members ):
-    records = map(ujson.loads, open(path_issues, encoding="utf8"))
-    df = pd.DataFrame.from_records(records)
-    pd.set_option("display.max_rows", None, "display.max_columns", None,'display.max_colwidth', None)
-    #print(df.keys())
-    #print(df[['title','description','author_id']])
-    print(df[['description']].head(15))
-    #print(df.iloc[2])
 
 def getAccessToken(username, issues_file, members_file, endpoint):
     print('Please, introduce the password to connect to taiga username already provided')
@@ -80,23 +72,6 @@ def getAccessToken(username, issues_file, members_file, endpoint):
         print ('The response from the server is not valid')
         exit (2)
 
-def getMemberships(username, issues_file, members_file, endpoint):
-    headers = prepareHeaders()
-    response = requests.get(endpoint + ENDPOINT_MEMBERS, headers = headers)
-    if response.ok:
-        responseJson = response.json()
-        try:
-            memberName = []
-            for membership in responseJson:
-                memberName.append(membership['full_name'])
-            print ('The current memberships are: ' , memberName)
-            return memberName
-        except:
-            print ('We could not get the memberships full name')
-    else:
-        print ('The response from the server is not valid')
-        exit (2)
-
 def prepareHeaders():
     if (authToken is not None):
         return {"Authorization": "Bearer " + authToken}
@@ -104,13 +79,74 @@ def prepareHeaders():
         print ('The auth token is not correct')
         exit (2)
 
+# ----------------   MEMBERSHIPS
+
+def getMemberships(username, issues_file, members_file, endpoint):
+    response = requests.get(endpoint + ENDPOINT_MEMBERS, headers = prepareHeaders())
+    if response.ok:
+        responseJson = response.json()
+        try:
+            memberName = []
+            for membership in responseJson:
+                memberName.append(membership['full_name'])
+            print ('Current memberships are: ' , memberName)
+            return memberName
+        except:
+            print ('We could not get the memberships full name')
+    else:
+        print ('The response from the server is not valid')
+        exit (2)
+
+def getMembershipsFromGitlabFile(members_file, endpoint):
+    records = map(ujson.loads, open(members_file, encoding="utf8"))
+    df = pd.DataFrame.from_records(records)
+    test = df[['user','access_level']]
+    values = []
+    for user in test.values.tolist():
+        if (int(user[1]) >= 40):
+            data = {}
+            data['project'] = projectId
+            data['username'] = user[0]['username'] + '@tegonal.com'
+            data['role'] = getStakeholderRole(endpoint)
+            values.append(data)
+    return(values)
+
+def createMemberships(endpoint, members_file):
+    memberships = getMembershipsFromGitlabFile(members_file, endpoint)
+    for member in memberships:
+        print (member)
+        response = requests.post(endpoint + ENDPOINT_MEMBERS, data = member, headers = prepareHeaders())
+        print (response.text)
+        if response.ok:
+            print ('Member created')
+        else:
+            print ('The response from the server while creating the memberships is not valid')
+            exit (2)
+
+# ----------------  ROLES
+
+def getStakeholderRole(endpoint):
+    response = requests.get(endpoint + ENDPOINT_ROLES + '?project=' + str(projectId), headers = prepareHeaders())
+    if response.ok:
+        responseJson = response.json()
+        try:
+            for role in responseJson:
+                if role['name'] == 'Stakeholder':
+                    return role['id']
+        except:
+            print ('We could not get the roles')
+    else:
+        print ('The response from the server is not valid')
+        exit (2)
+
+# ----------------  PROJECT
+
 def createProject(username, endpoint, projectName):
     if not projectNameExists(username, endpoint, projectName):
-        headers = {"Authorization": "Bearer " + authToken}
         data = {}
         data['description'] = "Gitlab import from " + projectName
         data['name'] = projectName
-        response = requests.post(endpoint + ENDPOINT_PROJECTS, data = data, headers = headers)
+        response = requests.post(endpoint + ENDPOINT_PROJECTS, data = data, headers = prepareHeaders())
         if response.ok:
             responseJson = response.json()
             global projectId
@@ -124,8 +160,7 @@ def createProject(username, endpoint, projectName):
         exit (2)
 
 def projectNameExists(username, endpoint, projectName):
-    headers = {"Authorization": "Bearer " + authToken}
-    response = requests.get(endpoint + ENDPOINT_PROJECTS, headers = headers)
+    response = requests.get(endpoint + ENDPOINT_PROJECTS, headers = prepareHeaders())
     if response.ok:
         responseJson = response.json()
         try:
@@ -139,12 +174,23 @@ def projectNameExists(username, endpoint, projectName):
         print ('The response from the server is not valid')
         exit (2)
 
+# ----------------  ISSUES
+
 def createIssue(username, issues_file, members_file, endpoint):
     if (authToken is not None):
         print (authToken)
     else:
         print ('The auth token is not correct')
         exit (2)
+
+def importIssues(issues, members ):
+    records = map(ujson.loads, open(path_issues, encoding="utf8"))
+    df = pd.DataFrame.from_records(records)
+    pd.set_option("display.max_rows", None, "display.max_columns", None,'display.max_colwidth', None)
+    #print(df.keys())
+    #print(df[['title','description','author_id']])
+    print(df[['description']].head(15))
+    #print(df.iloc[2])
 
 if __name__ == "__main__":
    main(sys.argv[1:])
