@@ -42,8 +42,9 @@ def main(argv):
         if (username is not None) and (issues_file is not None) and (members_file is not None) and (endpoint is not None) and (projectName is not None):
             if (validators.url(endpoint)):
                 getAccessToken(username, issues_file, members_file, endpoint)
-                createProject(username, endpoint, projectName)
+                createProject(endpoint, projectName)
                 createMemberships(endpoint, members_file)
+
             else:
                 print ('The endpoint provided is not a valid url')
                 exit (2)
@@ -81,7 +82,7 @@ def prepareHeaders():
 
 # ----------------   MEMBERSHIPS
 
-def getMemberships(username, issues_file, members_file, endpoint):
+def getMemberships(issues_file, members_file, endpoint):
     response = requests.get(endpoint + ENDPOINT_MEMBERS, headers = prepareHeaders())
     if response.ok:
         responseJson = response.json()
@@ -114,14 +115,46 @@ def getMembershipsFromGitlabFile(members_file, endpoint):
 def createMemberships(endpoint, members_file):
     memberships = getMembershipsFromGitlabFile(members_file, endpoint)
     for member in memberships:
-        print (member)
-        response = requests.post(endpoint + ENDPOINT_MEMBERS, data = member, headers = prepareHeaders())
-        print (response.text)
-        if response.ok:
-            print ('Member created')
+        if not membershipExists(endpoint, member['username']):
+            response = requests.post(endpoint + ENDPOINT_MEMBERS, data = member, headers = prepareHeaders())
+            if response.ok:
+                print ('Member ', member['username'], ' created')
+            else:
+                print ('The response from the server while creating the memberships is not valid')
+                exit (2)
         else:
-            print ('The response from the server while creating the memberships is not valid')
+            print ('The member ', member['username'], ' already exists')
+
+def membershipExists(endpoint, memberName):
+    memberIds = getMembershipIds(endpoint, memberName)
+    for memberId in memberIds:
+        response = requests.get(endpoint + ENDPOINT_MEMBERS + '/' + str(memberId), headers = prepareHeaders())
+        if response.ok:
+            responseJson = response.json()
+            try:
+                if responseJson['email'] == memberName:
+                    return True
+            except:
+                print ('We could not get the member email')
+        else:
+            print ('The response from the server is not valid')
             exit (2)
+    return False
+
+def getMembershipIds(endpoint, memberName):
+    response = requests.get(endpoint + ENDPOINT_MEMBERS, headers = prepareHeaders())
+    if response.ok:
+        responseJson = response.json()
+        try:
+            memberIds = []
+            for membership in responseJson:
+                memberIds.append(membership['id'])
+            return memberIds
+        except:
+            print ('We could not get the member id')
+    else:
+        print ('The response from the server is not valid')
+        exit (2)
 
 # ----------------  ROLES
 
@@ -141,15 +174,16 @@ def getStakeholderRole(endpoint):
 
 # ----------------  PROJECT
 
-def createProject(username, endpoint, projectName):
-    if not projectNameExists(username, endpoint, projectName):
+def createProject(endpoint, projectName):
+    global projectId
+    projectId = projectNameExists(endpoint, projectName)
+    if projectId == 0:
         data = {}
         data['description'] = "Gitlab import from " + projectName
         data['name'] = projectName
         response = requests.post(endpoint + ENDPOINT_PROJECTS, data = data, headers = prepareHeaders())
         if response.ok:
             responseJson = response.json()
-            global projectId
             projectId = responseJson['id']
             print ('The project ' , projectName , ' with id= ' , projectId , 'has been created')
         else:
@@ -157,17 +191,16 @@ def createProject(username, endpoint, projectName):
             exit (2)
     else:
         print ('The project already exists')
-        exit (2)
 
-def projectNameExists(username, endpoint, projectName):
+def projectNameExists(endpoint, projectName):
     response = requests.get(endpoint + ENDPOINT_PROJECTS, headers = prepareHeaders())
     if response.ok:
         responseJson = response.json()
         try:
             for project in responseJson:
                 if project['name'] == projectName:
-                    return True
-            return False
+                    return project['id']
+            return 0
         except:
             print ('We could not get the project name')
     else:
@@ -176,7 +209,7 @@ def projectNameExists(username, endpoint, projectName):
 
 # ----------------  ISSUES
 
-def createIssue(username, issues_file, members_file, endpoint):
+def createIssue(issues_file, members_file, endpoint):
     if (authToken is not None):
         print (authToken)
     else:
