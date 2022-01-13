@@ -47,7 +47,7 @@ def main(argv):
                 createMemberships(endpoint, members_file)
                 createHashMapGitlabUserIdTaiga(members_file, endpoint)
                 print(gitlabTaigaUsersDict)
-                getIssuesFromGitlabFile(endpoint, issues_file)
+                createUserStory(issues_file, endpoint)
             else:
                 print ('The endpoint provided is not a valid url')
                 exit (2)
@@ -274,25 +274,19 @@ def getIssuesFromGitlabFile(endpoint, issues_file):
             data['owner'] = gitlabTaigaUsersDict.get('4')
         data['project'] = projectId
         values.append(data)
-    print (values)
+    return (values)
 
-def createUserStory(issues_file, members_file, endpoint):
-    if (authToken is not None):
-        print (authToken)
-    else:
-        print ('The auth token is not correct')
-        exit (2)
+def createUserStory(issues_file, endpoint):
+    issues = getIssuesFromGitlabFile(endpoint, issues_file)
+    for issue in issues:
+        response = requests.post(endpoint + ENDPOINT_USERSTORIES, data = issue, headers = prepareHeaders())
+        if response.ok:
+            print ('User Story ', issue['subject'], ' created')
+        else:
+            print ('The response from the server while creating the user story is not valid')
+            exit (2)
 
 #def createComments():
-
-def importIssues(issues, members ):
-    records = map(ujson.loads, open(path_issues, encoding="utf8"))
-    df = pd.DataFrame.from_records(records)
-    pd.set_option("display.max_rows", None, "display.max_columns", None,'display.max_colwidth', None)
-    #print(df.keys())
-    #print(df[['title','description','author_id']])
-    print(df[['description']].head(15))
-    #print(df.iloc[2])
 
 if __name__ == "__main__":
    main(sys.argv[1:])
