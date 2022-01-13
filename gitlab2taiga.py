@@ -268,8 +268,12 @@ def getIssuesFromGitlabFile(endpoint, issues_file):
             data['is_blocked'] = False
         if (issue[2] == 'closed'):
             data['is_closed'] = True
+            #this status needs to be variable
+            data['status'] = 216
         else:
             data['is_closed'] = False
+            #this status needs to be variable
+            data['status'] = 212
         if gitlabTaigaUsersDict.get('4'):
             data['owner'] = gitlabTaigaUsersDict.get('4')
         data['project'] = projectId
