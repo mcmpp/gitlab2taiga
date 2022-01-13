@@ -12,6 +12,7 @@ ENDPOINT_PROJECTS = "/api/v1/projects"
 ENDPOINT_MEMBERS = "/api/v1/memberships"
 ENDPOINT_ROLES = "/api/v1/roles"
 ENDPOINT_LOGIN = "/api/v1/auth"
+ENDPOINT_USERSTORIES = "/api/v1/userstories"
 
 def main(argv):
     try:
@@ -41,17 +42,19 @@ def main(argv):
                 print ('gitlab2taiga.py -i <issues file> -m <members file> -e <taiga endpoint> -u <taiga username> -p <project name>')
         if (username is not None) and (issues_file is not None) and (members_file is not None) and (endpoint is not None) and (projectName is not None):
             if (validators.url(endpoint)):
-                getAccessToken(username, issues_file, members_file, endpoint)
+                getAccessToken(username, endpoint)
                 createProject(endpoint, projectName)
                 createMemberships(endpoint, members_file)
-
+                createHashMapGitlabUserIdTaiga(members_file, endpoint)
+                print(gitlabTaigaUsersDict)
+                getIssuesFromGitlabFile(endpoint, issues_file)
             else:
                 print ('The endpoint provided is not a valid url')
                 exit (2)
         else:
             print ('gitlab2taiga.py -i <issues file> -m <members file> -e <taiga endpoint> -u <taiga username> -p <project name>')
 
-def getAccessToken(username, issues_file, members_file, endpoint):
+def getAccessToken(username, endpoint):
     print('Please, introduce the password to connect to taiga username already provided')
     global password
     password = getpass.getpass()
@@ -82,7 +85,7 @@ def prepareHeaders():
 
 # ----------------   MEMBERSHIPS
 
-def getMemberships(issues_file, members_file, endpoint):
+def getMembershipsFullName(endpoint):
     response = requests.get(endpoint + ENDPOINT_MEMBERS, headers = prepareHeaders())
     if response.ok:
         responseJson = response.json()
@@ -98,12 +101,49 @@ def getMemberships(issues_file, members_file, endpoint):
         print ('The response from the server is not valid')
         exit (2)
 
+def getMembershipEmail(membershipId,endpoint):
+    response = requests.get(endpoint + ENDPOINT_MEMBERS + '/' + str(membershipId), headers = prepareHeaders())
+    if response.ok:
+        responseJson = response.json()
+        try:
+            return responseJson['email']
+        except:
+            print ('We could not get the memberships email')
+    else:
+        print ('The response from the server is not valid')
+        exit (2)
+
+def createHashMapGitlabUserIdTaiga(members_file, endpoint):
+    records = map(ujson.loads, open(members_file, encoding="utf8"))
+    df = pd.DataFrame.from_records(records)
+    gitlabUsers = df[['user']].values.tolist()
+    gitlabUserDict = dict()
+    for gitlabUser in gitlabUsers:
+        gitlabUserDict[gitlabUser[0]['id']] = gitlabUser[0]['username']
+    for key, value in gitlabUserDict.items():
+        response = requests.get(endpoint + ENDPOINT_MEMBERS, headers = prepareHeaders())
+        if response.ok:
+            responseJson = response.json()
+            try:
+                global gitlabTaigaUsersDict
+                gitlabTaigaUsersDict = dict()
+                for membership in responseJson:
+                    if getMembershipEmail(membership['id'], endpoint) == value + '@tegonal.com':
+                        gitlabTaigaUsersDict[membership['user']] = key
+            except:
+                print ('We could not get the memberships full name')
+        else:
+            print ('The response from the server is not valid')
+            exit (2)
+#        taigaUserId =
+#        gitlabUserMapTaigaUser[user] =
+
 def getMembershipsFromGitlabFile(members_file, endpoint):
     records = map(ujson.loads, open(members_file, encoding="utf8"))
     df = pd.DataFrame.from_records(records)
-    test = df[['user','access_level']]
+    users = df[['user','access_level']]
     values = []
-    for user in test.values.tolist():
+    for user in users.values.tolist():
         if (int(user[1]) >= 40):
             data = {}
             data['project'] = projectId
@@ -209,12 +249,41 @@ def projectNameExists(endpoint, projectName):
 
 # ----------------  ISSUES
 
-def createIssue(issues_file, members_file, endpoint):
+
+def getIssuesFromGitlabFile(endpoint, issues_file):
+    records = map(ujson.loads, open(issues_file, encoding="utf8"))
+    df = pd.DataFrame.from_records(records)
+    issues = df[['title','description','state','notes', 'author_id', 'issue_assignees']]
+    values = []
+    for issue in issues.values.tolist():
+        data = {}
+        if gitlabTaigaUsersDict.get('5'):
+            data['assigned_to'] = gitlabTaigaUsersDict.get('5')
+        data['subject'] = issue[0]
+        data['description'] = issue[1]
+        data['description_html'] = issue[1]
+        if (issue[2] == 'blocked'):
+            data['is_blocked'] = True
+        else:
+            data['is_blocked'] = False
+        if (issue[2] == 'closed'):
+            data['is_closed'] = True
+        else:
+            data['is_closed'] = False
+        if gitlabTaigaUsersDict.get('4'):
+            data['owner'] = gitlabTaigaUsersDict.get('4')
+        data['project'] = projectId
+        values.append(data)
+    print (values)
+
+def createUserStory(issues_file, members_file, endpoint):
     if (authToken is not None):
         print (authToken)
     else:
         print ('The auth token is not correct')
         exit (2)
+
+#def createComments():
 
 def importIssues(issues, members ):
     records = map(ujson.loads, open(path_issues, encoding="utf8"))
