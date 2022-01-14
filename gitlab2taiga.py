@@ -44,10 +44,10 @@ def main(argv):
             if (validators.url(endpoint)):
                 getAccessToken(username, endpoint)
                 createProject(endpoint, projectName)
-                createMemberships(endpoint, members_file)
-                createHashMapGitlabUserIdTaiga(members_file, endpoint)
-                print(gitlabTaigaUsersDict)
-                createUserStory(issues_file, endpoint)
+                #createMemberships(endpoint, members_file)
+                #createHashMapGitlabUserIdTaiga(members_file, endpoint)
+                #createUserStory(issues_file, endpoint)
+                deleteAllUserStories(endpoint)
             else:
                 print ('The endpoint provided is not a valid url')
                 exit (2)
@@ -78,7 +78,7 @@ def getAccessToken(username, endpoint):
 
 def prepareHeaders():
     if (authToken is not None):
-        return {"Authorization": "Bearer " + authToken}
+        return {"Authorization": "Bearer " + authToken , "x-disable-pagination": "True" }
     else:
         print ('The auth token is not correct')
         exit (2)
@@ -249,7 +249,6 @@ def projectNameExists(endpoint, projectName):
 
 # ----------------  ISSUES
 
-
 def getIssuesFromGitlabFile(endpoint, issues_file):
     records = map(ujson.loads, open(issues_file, encoding="utf8"))
     df = pd.DataFrame.from_records(records)
@@ -280,6 +279,8 @@ def getIssuesFromGitlabFile(endpoint, issues_file):
         values.append(data)
     return (values)
 
+# ----------------  ISSUES
+
 def createUserStory(issues_file, endpoint):
     issues = getIssuesFromGitlabFile(endpoint, issues_file)
     for issue in issues:
@@ -290,7 +291,36 @@ def createUserStory(issues_file, endpoint):
             print ('The response from the server while creating the user story is not valid')
             exit (2)
 
-#def createComments():
+def deleteAllUserStories(endpoint):
+    userStoryIds = getAllUserStoryIds(endpoint)
+    for userStoryId in userStoryIds:
+        response = requests.delete(endpoint + ENDPOINT_USERSTORIES + '/' + str(userStoryId), headers = prepareHeaders())
+        if response.ok:
+            print ('User Story ', userStoryId, ' deleted')
+        else:
+            print ('The response from the server while deleting the user story is not valid')
+            exit (2)
+
+
+def getAllUserStoryIds(endpoint):
+    response = requests.get(endpoint + ENDPOINT_USERSTORIES + '?project=' + str(projectId), headers = prepareHeaders())
+    if response.ok:
+        responseJson = response.json()
+        try:
+            userStoriesId = []
+            for userStory in responseJson:
+                print (userStory['id'])
+                userStoriesId.append(userStory['id'])
+            return userStoriesId
+        except:
+            print ('We could not get the userStories')
+    else:
+        print ('The response from the server is not valid')
+        exit (2)
+
+
+# ----------------  USER STORIES STATUS
+
 
 if __name__ == "__main__":
    main(sys.argv[1:])
