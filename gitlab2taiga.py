@@ -278,6 +278,7 @@ def getIssuesFromGitlabFile(endpoint, issues_file):
         if gitlabTaigaUsersDict.get('4'):
             data['owner'] = gitlabTaigaUsersDict.get('4')
         data['project'] = projectId
+        data['notes'] = issue[3]
         values.append(data)
     return (values)
 
@@ -287,8 +288,17 @@ def createUserStory(issues_file, endpoint):
     issues = getIssuesFromGitlabFile(endpoint, issues_file)
     for issue in issues:
         response = requests.post(endpoint + ENDPOINT_USERSTORIES, data = issue, headers = prepareHeaders())
+        print ('The user story ', issue['subject'],' has been created')
         if response.ok:
-            print ('User Story ', issue['subject'], ' created')
+            responseJson = response.json()
+            notes = issue['notes']
+            cnt = 0
+            for note in notes:
+                data = {}
+                data['comment']= note['note']
+                data['version']= cnt + 1
+                response = requests.patch(endpoint + ENDPOINT_USERSTORIES + '/' + str(responseJson['id']),data = data, headers = prepareHeaders())
+                print ('A comment has been added to the user story ', issue['subject'])
         else:
             print ('The response from the server while creating the user story is not valid')
             exit (2)
