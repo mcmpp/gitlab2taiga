@@ -13,6 +13,7 @@ ENDPOINT_MEMBERS = "/api/v1/memberships"
 ENDPOINT_ROLES = "/api/v1/roles"
 ENDPOINT_LOGIN = "/api/v1/auth"
 ENDPOINT_USERSTORIES = "/api/v1/userstories"
+ENDPOINT_USERSTORIES_STATUS = "/api/v1/userstory-statuses"
 
 def main(argv):
     try:
@@ -44,10 +45,11 @@ def main(argv):
             if (validators.url(endpoint)):
                 getAccessToken(username, endpoint)
                 createProject(endpoint, projectName)
-                #createMemberships(endpoint, members_file)
-                #createHashMapGitlabUserIdTaiga(members_file, endpoint)
-                #createUserStory(issues_file, endpoint)
-                deleteAllUserStories(endpoint)
+                getAllUserStoryStatus(endpoint)
+                createMemberships(endpoint, members_file)
+                createHashMapGitlabUserIdTaiga(members_file, endpoint)
+                createUserStory(issues_file, endpoint)
+                #deleteAllUserStories(endpoint)
             else:
                 print ('The endpoint provided is not a valid url')
                 exit (2)
@@ -268,11 +270,11 @@ def getIssuesFromGitlabFile(endpoint, issues_file):
         if (issue[2] == 'closed'):
             data['is_closed'] = True
             #this status needs to be variable
-            data['status'] = 216
+            data['status'] = userStoryStatuses.get('Archived')
         else:
             data['is_closed'] = False
             #this status needs to be variable
-            data['status'] = 212
+            data['status'] = userStoryStatuses.get('Ready')
         if gitlabTaigaUsersDict.get('4'):
             data['owner'] = gitlabTaigaUsersDict.get('4')
         data['project'] = projectId
@@ -309,7 +311,6 @@ def getAllUserStoryIds(endpoint):
         try:
             userStoriesId = []
             for userStory in responseJson:
-                print (userStory['id'])
                 userStoriesId.append(userStory['id'])
             return userStoriesId
         except:
@@ -320,6 +321,21 @@ def getAllUserStoryIds(endpoint):
 
 
 # ----------------  USER STORIES STATUS
+
+def getAllUserStoryStatus(endpoint):
+    response = requests.get(endpoint + ENDPOINT_USERSTORIES_STATUS + '?project=' + str(projectId), headers = prepareHeaders())
+    if response.ok:
+        responseJson = response.json()
+        try:
+            global userStoryStatuses;
+            userStoryStatuses = dict()
+            for userStoryStatus in responseJson:
+                userStoryStatuses[userStoryStatus['name']] = userStoryStatus['id']
+        except:
+            print ('We could not get the userStories')
+    else:
+        print ('The response from the server is not valid')
+        exit (2)
 
 
 if __name__ == "__main__":
