@@ -120,6 +120,8 @@ def createHashMapGitlabUserIdTaiga(members_file, endpoint):
     df = pd.DataFrame.from_records(records)
     gitlabUsers = df[['user']].values.tolist()
     gitlabUserDict = dict()
+    global gitlabTaigaUsersDict
+    gitlabTaigaUsersDict = {}
     for gitlabUser in gitlabUsers:
         gitlabUserDict[gitlabUser[0]['id']] = gitlabUser[0]['username']
     for key, value in gitlabUserDict.items():
@@ -127,18 +129,16 @@ def createHashMapGitlabUserIdTaiga(members_file, endpoint):
         if response.ok:
             responseJson = response.json()
             try:
-                global gitlabTaigaUsersDict
-                gitlabTaigaUsersDict = dict()
                 for membership in responseJson:
                     if getMembershipEmail(membership['id'], endpoint) == value + '@tegonal.com':
-                        gitlabTaigaUsersDict[membership['user']] = key
+                        if (membership['user'] is not None):
+                            gitlabTaigaUsersDict[key] = membership['user']
+
             except:
                 print ('We could not get the memberships full name')
         else:
             print ('The response from the server is not valid')
             exit (2)
-#        taigaUserId =
-#        gitlabUserMapTaigaUser[user] =
 
 def getMembershipsFromGitlabFile(members_file, endpoint):
     records = map(ujson.loads, open(members_file, encoding="utf8"))
@@ -229,7 +229,7 @@ def createProject(endpoint, projectName):
             projectId = responseJson['id']
             print ('The project ' , projectName , ' with id= ' , projectId , 'has been created')
         else:
-            print ('The response from the server is not valid')
+            print ('The response from the server while creating a new project is not valid')
             exit (2)
     else:
         print ('The project already exists')
@@ -258,8 +258,10 @@ def getIssuesFromGitlabFile(endpoint, issues_file):
     values = []
     for issue in issues.values.tolist():
         data = {}
-        if gitlabTaigaUsersDict.get('5'):
-            data['assigned_to'] = gitlabTaigaUsersDict.get('5')
+        data['assigned_to'] = None
+        for assignee in issue[5]:
+            if assignee['user_id'] in gitlabTaigaUsersDict:
+                data['assigned_to'] = gitlabTaigaUsersDict.get(assignee['user_id'])
         data['subject'] = issue[0]
         data['description'] = issue[1]
         data['description_html'] = issue[1]
@@ -275,8 +277,8 @@ def getIssuesFromGitlabFile(endpoint, issues_file):
             data['is_closed'] = False
             #this status needs to be variable
             data['status'] = userStoryStatuses.get('Ready')
-        if gitlabTaigaUsersDict.get('4'):
-            data['owner'] = gitlabTaigaUsersDict.get('4')
+        if issue[4] in gitlabTaigaUsersDict:
+            data['owner'] = gitlabTaigaUsersDict.get(issue[4])
         data['project'] = projectId
         data['notes'] = issue[3]
         values.append(data)
